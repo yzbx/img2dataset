@@ -19,8 +19,19 @@ def get_args():
     parser.add_argument('--rank', type=int, default=0)
     parser.add_argument('--world', type=int, default=3)
     parser.add_argument('--sub_dir', nargs="*", default=['laion1B-nolang', 'laion2B-en', 'laion2B-multi'])
+    parser.add_argument('--lower', action='store_true')
 
     return parser.parse_args()
+
+
+def get_global_download_pfiles(out_dir):
+    log_files = glob.glob(f'{out_dir}/*/*/log.txt')
+    download_pfiles = []
+    for f in log_files:
+        with open(f, 'r') as fp:
+            lines = fp.readlines()
+        download_pfiles.extend(osp.basename(line.strip()) for line in lines)
+    return download_pfiles
 
 if __name__ == "__main__":
     args = get_args()
@@ -46,6 +57,10 @@ if __name__ == "__main__":
                 print(f'skip downloaded pfile {pfile}')
                 continue
 
+            if pfile in get_global_download_pfiles(args.out_dir):
+                print(f'repeat download file found for {pfile}')
+                assert False
+
             # laion5B/laion1B-nolang/part-00003-d6a94da9-d368-4d5b-9ab7-3f6d3c7abdb3-c000.snappy.parquet
             pid = osp.basename(pfile).split('-')[1]
             output_folder = osp.join(output_dir, pid)
@@ -54,27 +69,31 @@ if __name__ == "__main__":
             else:
                 os.makedirs(output_folder, exist_ok=True)
 
-            download(
-                processes_count=args.processes,
-                thread_count=args.threads,
-                retries=args.retry,
-                url_list = pfile,
-                image_size=384,
-                resize_only_if_bigger=True,
-                resize_mode="keep_ratio",
-                skip_reencode=True,
-                output_folder=output_folder,
-                output_format="webdataset",
-                input_format="parquet",
-                url_col="URL",
-                caption_col="TEXT",
-                enable_wandb=False,
-                number_sample_per_shard=1000,
-                distributor="multiprocessing",
-                save_additional_columns=["NSFW","similarity","LICENSE"],
-                oom_shard_count=6,
-                incremental_mode='incremental'
-            )
+            try:
+                download(
+                    processes_count=args.processes,
+                    thread_count=args.threads,
+                    retries=args.retry,
+                    url_list = pfile,
+                    image_size=384,
+                    resize_only_if_bigger=True,
+                    resize_mode="keep_ratio",
+                    skip_reencode=True,
+                    output_folder=output_folder,
+                    output_format="webdataset",
+                    input_format="parquet",
+                    url_col="url" if args.lower else "URL",
+                    caption_col="text" if args.lower else "TEXT",
+                    enable_wandb=False,
+                    number_sample_per_shard=1000,
+                    distributor="multiprocessing",
+                    save_additional_columns=["nsfw" if args.lower else "NSFW","similarity", "license" if args.lower else "LICENSE"],
+                    oom_shard_count=6,
+                    incremental_mode='incremental'
+                )
+            except Exception as e:
+                print(e)
+                continue
 
             with open(log_file, 'a') as fa:
                 fa.write(pfile + '\n')
