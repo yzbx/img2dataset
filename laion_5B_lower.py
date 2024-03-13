@@ -71,7 +71,7 @@ if __name__ == "__main__":
                 enable_wandb=False,
                 number_sample_per_shard=1000,
                 distributor="multiprocessing",
-                save_additional_columns=["NSFW","similarity","LICENSE"],
+                save_additional_columns=["nsfw","similarity","license"],
                 oom_shard_count=6,
                 incremental_mode='incremental'
             )
